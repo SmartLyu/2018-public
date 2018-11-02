@@ -1,0 +1,200 @@
+hash列表
+    节省空间
+    存储原理： 在一个变量有可以有多个字段，每个字段可以存储一个值
+                区别于list列表，hash存储没有顺序只分，只是根据字段进行分类存储
+
+创建哈希表	hset 变量 字段 值
+	如果变量存在，那这命令就是给变量添加一个字段并赋值
+获取哈希值	hget 变量 字段
+存储多个字段	hmset 变量 字段1 值1 字段2 值2 字段3 值3
+获取多个字段的哈希值	hmget 变量 字段1 字段2 字段3
+获取变量中所有字段名	hkeys 变量
+获取变量中所有字段名和字段值	hgetall 变量
+获取变量中所有字段值	hvals 变量
+删除某个字段	hdel 变量 字段
+删除变量	del 变量
+
+
+
+
+
+mongodb数据库
+
+mongodb和mysql的类比：
+MongoDB	MySQL
+库	库
+集合	表
+文档	行
+字段	列
+
+    严格区分大小写，和mysql不同
+    1. 初始安装：
+       1.1 解压包，然后创建一个工作目录 
+       1.2 在工作目录下创建一个 etc log data 和 data/db 这些目录
+       1.3 把解压的mongodb的包中的bin目录拷贝到工作目录下
+ 
+    2. 配置 ： 在工作目录下的etc目录下创建一个配置文件mongodb.conf
+dbpath=/工作目录/data/db/
+logpath=/工作目录/log/mongodb.log
+logappend=true
+fork=true
+bind_ip=本机的IP地址	# 不写该行默认为127.0.0.1
+port=端口号码			# 不写默认为27017
+
+    3. 给启动服务和停止服务设置别名(方便操作，可以不进文档)
+echo "alias mongodb='/工作目录/bin/mongod -f /usr/local/mongodb/etc/mongodb.conf'" >> /etc/bashrc 
+echo "alias startmongo='/工作目录/bin/mongo --host 本机的IP地址 --port 端口号码'" >> /etc/bashrc 
+source /etc/bashrc
+
+    4. 启动服务
+/工作目录/bin/mongod -f /usr/local/mongodb/etc/mongdb.conf
+# 如果设置了别名，那简单了 命令输入： mongodb 即可
+
+    5. 停止服务
+/工作目录/bin/mongod --shutdown -f /usr/local/mongodb/etc/mongdb.conf 
+# 如果设置了别名，那简单了 命令输入： mongodb --shutdown 即可
+
+    6. 进入数据库 (根据启动的时候配置的IP和端口启动，如果配置中没写，这里也可以不写host和port两个选项参数)
+/工作目录/bin/mongo --host 本机的IP地址 --port 端口号码
+# 如果设置了别名，那简单了 命令输入：startmongo 即可
+
+    *. 如果觉得老是写工作目录麻烦，就修改PATH的值
+echo 'export PATH=$PATH:/工作目录/bin' >> /etc/profile
+source /etc/profile
+
+
+数据库命令
+查看所有库	show dbs
+查看当前库名	db
+切换到某个库	use 库名
+	如果该库不存在，在一段时间后创建该库，或者下一个对该库进行修改的操作的时候
+查看库下所有集合	show tables
+删除当前所在库	db.dropDatabase()
+创建集合新一个文档的数据(如果集合不存在会自动创建)	db.集合名.save({字段名1:值1,字段名2:值2})
+删除集合	db.集合名.drop()
+查看集合中所有文档信息	db.集合名.find()
+	一次显示20个文档，如果要继续查看就立刻使用命令 it
+	最后全部输入完，还在用it命令会报错"no cursor"
+查看集合中所有符合条件文档信息	db.集合名.find({条件})
+查看集群中的一个文档信息	db.集合.findOne()
+删除指定文档的内容	db.集合.remove({条件})
+	db.集合.remove({})    代表删除集合中所有内容，但是集合依然存在
+
+
+
+存储类型
+字符string	用""引起来的都是当作string类型，不管里面字符也没有具体含义，只要引起来就是字符
+布尔hool	只有两个值true false
+空null	值有一个值null，代表字段存储量一个空值
+数值	默认是double类型的64位浮点的计数类型
+	NumberInt(数字)，让里面的数字进行去尾操作成为一个整数，也就是 NumberInt(3.999)=3
+	NumberLong(数字)，这里面在那写整数，出来的也是整数，如果里面写一个小数，那么就报错
+数组array	格式：{字段:[1,2,3,4,"a","b"]}
+	让一个字段存储多个值
+代码	格式：{字段:function(){/* 代码内容 */}}
+	存储代码内容
+日期	格式：{字段:new Date()}
+	存储当前日期信息，不包含时区
+对象	格式：{字段:ObjectId()}
+	在该字段存储一个文档唯一标识，一般默认自动创建的id即使存储这个类型的值
+内嵌	格式：{字段:{内嵌字段1:"值1",内嵌字段2:"值2",内嵌字段3:"值3"}}
+	在该字段中存储多个字段信息，而这么多字段都当作一个值存在主字段中
+正则表达式	格式：{字段:/正则/}
+	使用正则做一个限定条件
+
+
+注意：
+   1. 当在集合中存储字段的时候，前后字段相同，后者字段的数据会覆盖前者，不过这属于操作失误，尽量避免
+> db.example.save({字段1:ObjectId()})
+WriteResult({ "nInserted" : 1 })
+> db.example.save({字段2:ObjectId(),字段2:new Date()})
+WriteResult({ "nInserted" : 1 })
+> db.example.save({字段3:ObjectId(),字段3:new Date(),字段3:ObjectId()})
+WriteResult({ "nInserted" : 1 })
+> db.example.find()
+{ "_id" : ObjectId("5bdbf0fe169e7f1d4a497ec4"), "字段1" : ObjectId("5bdbf0fe169e7f1d4a497ec3") }
+{ "_id" : ObjectId("5bdbf112169e7f1d4a497ec6"), "字段2" : ISODate("2018-11-02T06:39:14.051Z") }
+{ "_id" : ObjectId("5bdbf129169e7f1d4a497ec9"), "字段3" : ObjectId("5bdbf129169e7f1d4a497ec8") }
+    2. 所有存储后，都会自动创建一个_id的字段，并且赋予对象类型值，用于唯一标示文档，可以理解为主键，所以尽量字段不要取这个名字，也不要修改这个字段的值，如果修改后文档和其他文档的_id值相同，那么就会报错
+
+
+数据库导入导出
+    数据库导出 CSV格式
+/工作目录/bin/mongoexport --host 数据库IP --port 端口号 -d 库名 -c 集合名 -f 字段名1,字段名2,字段名3 --type=csv > /存储目录(需要提前创建号)/存储文件名.csv
+
+# csv存储文件格式：
+
+字段名1,字段名2,字段名3
+值11,值12,
+值21,,值23
+
+# 如果原来存储的集合中没有某个具体的字段的值，那么就会以空代替，每隔值之间用,(逗号)隔开
+# 第一行写的字段数据中有n个字段，就有n-1个逗号，那么下面所有的值中都有多少个逗号
+
+     数据恢复 CSV格式(一般采用最后两个命令进行导入操作)
+# 根据指定的字段，把所有的数据依次导入，不过这样CSV中所有的数据都会导入数据库，包括第一行的字段指定
+/工作目录/bin/mongoimport --host 数据库IP --port 端口号 -d 库名 -c 集合名 -f 字段名1,字段名2,字段名3 --type=csv  /存储目录/存储文件名.csv
+
+# 根据CSV的第一行中指定的字段进行追加导入
+/工作目录/bin/mongoimport --host 数据库IP --port 端口号 -d 库名 -c 集合名 --headerline --type=csv  /存储目录/存储文件名.csv
+
+# 先删除指定库的集合中的所有数据，然后进行导入
+/工作目录/bin/mongoimport --host 数据库IP --port 端口号 -d 库名 -c 集合名 --headerline --drop --type=csv  /存储目录/存储文件名.csv
+
+    数据库导出 JSON格式
+/工作目录/bin/mongoexport --host 数据库IP --port 端口号 -d 库名 -c 集合名 --type=json > /存储目录(需要提前创建号)/存储文件名.json
+
+     数据恢复 JSON格式(一般采用最后两个命令进行导入操作)
+# 保留原集合中的内容，如果想删除原集合中的内容，用参数 --drop 即可
+/工作目录/bin/mongoimport --host 数据库IP --port 端口号 -d 库名 -c 集合名 --type=json  /存储目录/存储文件名.json
+
+    区别：
+     CSV文件只存储了指定字段的值，所以必须指定字段，相对导出速度快且体积小
+     JSON文件是把我们用db.集合.find()查看到的所有信息全部存储下来，存储比较全面
+
+
+
+
+数据备份
+    使用命令进行备份
+/工作目录/bin/mongodump  --host 数据库IP --port 端口 -d 库名 -c 集合名 -o /存储的目录
+
+命令详解：
+--host、--port	指定数据的IP和端口
+	不写默认为127.0.0.1和27017
+-d	指定备份的库名，并且在指定的存储目录下创建一个和库同名的目录存储备份信息
+	不写默认是所有库，并且在指定存储目录下创建一个dump目录
+-c	指定备份的集合名
+	不写默认为所有集合
+-o	指定存储备份文件的目录
+	不写默认是当前目录
+
+
+
+数据恢复
+    使用命令进行恢复
+/工作目录/bin/mongorestore --host 数据库IP --port 端口 -d 库名 -c 集合名 /存储的目录/备份文件
+
+命令详解：
+--host、--port	指定数据的IP和端口
+	不写默认为127.0.0.1和27017
+-d	指定将数据恢复到哪个库中
+	不写默认根据备份的时候的库名进行恢复
+-c	指定备份的集合名
+	不写默认为所有集合
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
