@@ -1,0 +1,66 @@
+#!/bin/bash
+
+path=${0%/*}
+echo $path | grep '^/' &>/dev/null
+if [ $? -ne 0 ];then
+  path=$(echo $path | sed -r 's/.\/*//')
+  path=$PWD/$path
+fi
+path=$(echo $path | sed -r 's/\/{2,}/\//')
+cd $path
+
+if [ $1 == 'start' &>/dev/null ] ;then
+   answer='yes'
+else
+   read -p 'please tell yzy do you finish config in flie (yes,no):' answer   
+fi
+
+if [ $answer == 'no' ];then
+  for i in $( cat $path/main.conf | grep -v '^#' | awk -F= '{print $1}' | sed 's/ //g')
+  do
+    read -p 'please tell me '$i' is :' a
+    sed -i '/^'$i'/c'$i' = '$a $path/main.conf
+  done
+fi
+
+bash $path/scripts/bulid_pxe.sh $path
+echo 'now you can turn on your all servers'
+
+sleep_time=0.1
+go_start(){
+dead=0
+while [ $dead -le $1 ]
+do
+  echo -e '-'"\b\c"
+  sleep ${sleep_time}s
+  echo -e '/'"\b\c"
+  sleep ${sleep_time}s
+  echo -e '|'"\b\c"
+  sleep ${sleep_time}s
+  echo -e '\\'"\b\c"
+  sleep ${sleep_time}s
+  dead=$[$dead+1]
+done
+echo -e ' '"\b\c"
+}
+
+sleep 20m
+
+start=$(awk -F= '/range_start/{print $2}' $path/main.conf | sed 's/ //g')
+stop=$(awk -F= '/range_stop/{print $2}' $path/main.conf | sed 's/ //g')
+
+while :
+do
+  for i in `seq ${start##*.} ${stop##*.}`
+  do
+    {
+      go_start 1 &
+      ping -c 5 ${start%.*}.$i &>/dev/null
+      [ $? -eq 0 ] && break
+      sleep 1
+    } &
+  done
+  wait
+done
+
+bash $path/script/start.sh $path
