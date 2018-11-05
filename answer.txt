@@ -1,150 +1,97 @@
-MongoDB副本集
+进行安全配置的思路
+    1. 非技术手段： 管理制度(核实设备安全、网络物理连接)   (社会工程学)
+    2. 技术手段： 系统安全(权限限定)   服务安全(优化，高可用)   数据安全(备份)   网络安全(加密)
 
-    副本集其实就是拥有高可用的主从同步
-    优点：
-       1. 提高数据可用性、安全性、方便数据故障恢复
-       2. 支持故障自动切换、自动修复成员节点
-       3. 拥有高可用的特性
-
-  ！  工作过程：
-       主库oplog
-
-    配置副本集：
-        1. 修改配置文件/工作目录/etc/mongodb.conf，添加一行数据
-replSet=集群名(几个服务器要配置一样)
-
-        2. 进入预备成为主库的主机连接mongod服务器中，修改一个变量，这变量名可以自己定义，我定义为config，如果写错了，可以重新再定义一下，然后再继续下面的操作
-config = { 
-_id:'集群名', 
-members:[ 
-{_id:0,host:'服务器IP1:端口',}, 
-{_id:1,host:'服务器IP2:端口'}, 
-{_id:2,host:'服务器IP3:端口'} 
-] }
-
-        3. 启动副本集服务
-rs.initiate(config)
- 
-        4. 查看状态信息
-# 主要查看集群中各个服务器的健康性，health值为0就是服务器有问题，1就是没问题
-rs.status()
-	"members" : [
-		{
-			"_id" : 0,
-			"name" : "172.10.100.110:27017",
-			"health" : 1,
-
-# 查看集群主库信息，ismaster值为true就是主库，为false就算从库
-rs.isMaster()
-
-	"setName" : "rs1",
-	"setVersion" : 1,
-	"ismaster" : false,
-	"secondary" : true,
-	"primary" : "172.10.100.110:27017",
-	"me" : "1172.10.100.111:27017",
+/etc/passwd	用户信息
+/etc/shadow	用户密码数据(加密过)
+/etc/group	组信息
+/etc/gshadow	组密码
+/etc/skel/*	添加用户初始环境配置文件，有不少隐藏文件
+	这文件夹下的所有文件，再创建用户后，其加目录下就有什么
+/etc/profile/	系统配置文件，定义环境变量等信息
+/etc/login.defs	添加用户时候如果没有指定信息的时候，设定的默认参数
+/etc/issue	决定用户登陆纯字符界面的时侯，会出现什么样子的介绍页面
 
 
-        *. 设置副本可以查看数据(一般不用)
-db.getMongo().setSlaveOk()
+用户安全
 
-        
-        *. 撤除副本集群 (修改配置文件重新启动服务)
-sed -i '/replSet/d' /工作目录/etc/mongdb.conf
-/工作目录/bin/mongod -f /工作目录/etc/mongdb.conf --shutdown
-/工作目录/bin/mongod -f /工作目录/etc/mongdb.conf
+    相关信息的设定命令
+useradd	添加用户
+userdel	删除用户 (如果使用量参数-r，那么就删除用户的同时删除家目录)
+usermod	修改用户信息(-G修改所属组)
 
+chage -l 用户	查看用户的设置信息(用chage设定的信息)
+chage -d 天数 用户	设置用户自命令开始计算，多久时间内要修改好密码，不然不能进行任何操作
+	如果天数为0，那么用户一旦登陆，必须立刻设置密码
+chage -E yyyy-mm-dd 用户	设置用户失效日期，时间到了，用户就会被锁定
+	如果年月日那里写成 -1 那么就是永久保留
+chage -m 天数 用户	在密码更改之间的最小天数设置，默认天数为 0
+	天数为 0 时，表示用户可以在任何时间更改其密码。
 
-     副本集合的文件存储，数据都是存储再数据库local库下
-     操作日志的记录： oplog.rs
-db.oplog.rs.find()
-{ "ts" : Timestamp(1541210028, 1), "h" : NumberLong("2710323194495978686"), "v" : 2, "op" : "n", "ns" : "", "wall" : ISODate("2018-11-03T01:53:48.154Z"), "o" : { "msg" : "initiating set" } }
-{ "ts" : Timestamp(1541210040, 1), "t" : NumberLong(1), "h" : NumberLong("7795182114557876968"), "v" : 2, "op" : "n", "ns" : "", "wall" : ISODate("2018-11-03T01:54:00.243Z"), "o" : { "msg" : "new primary" } }
-{ "ts" : Timestamp(1541210040, 2), "t" : NumberLong(1), "h" : NumberLong("-1376008138436262787"), "v" : 2, "op" : "c", "ns" : "config.$cmd", "ui" : UUID("ac663edb-b178-4c9a-9fda-2971043a46f3"), "wall" : ISODate("2018-11-03T01:54:00.393Z"), "o" : { "create" : "transactions", "idIndex" : { "v" : 2, "key" : { "_id" : 1 }, "name" : "_id_", "ns" : "config.transactions" } } }
-
-
-    存储rs.status()的数据信息 system.replset	
-db.system.replset.find()
-{ "_id" : "rs1", "version" : 1, "protocolVersion" : NumberLong(1), "members" : [ { "_id" : 0, "host" : "192.168.4.51:27051", "arbiterOnly" : false, "buildIndexes" : true, "hidden" : false, "priority" : 1, "tags" : {  }, "slaveDelay" : NumberLong(0), "votes" : 1 }, ……
-
-
-     如何判断哪个从库做主库
-        1. 有一个从库发现主库出现问题，就会通知其他所有从库，然后其他从库都会立刻连接主库
-        2. 如果主库的确挂量，那么从库就会根据数据的更新时间进行比较
-        3. 最后，更新时间最近的从库就会成为主库
+passwd 用户	设置密码(--stdin代表非交互设置密码)
+passwd -l 用户	锁定用户，锁定后用户不能登陆，在/etc/shadow文件中的密码项前会多处两个叹号作为标识
+	这会导致用户将无法通过密码进行登陆，相当于让密码暂时失效，不过密钥还是可以进行登陆等操作
+passwd -u 用户	解锁用户
+passwd -S 用户	查看用户密码相关信息，第二列是LK是用户被锁定了，如果是PS那就是非锁定
+passwd -d 用户	删除用户密码(删除后，用户将无法被远程登陆)
 
 
-
-对于数据库文档的基本操作
-
-添加文档
-db.集合.save({字段1:值1,字段2:值2……})	添加或修改一个文档的值
-	如果想修改，必须指定_id的值，这样save就会修改指定文档的所有参数
-db.集合.insert({字段1:值1,字段2:值2……})	只添加一个文档的值
-	如果字段设定值中设置了_id的值，且这个_id的值事实存在，那么就会报错
-db.集合.insertMany([{字段1:值1,字段2:值2……},{字段m:值m,字段n:值n……}])	同时添加多个文档的值
-	和insert一样，只能添加不能修改
-
-查看文档
-db.集合.find()	查看所有行
-db.集合.findOne()	查看第一行
-db.集合.find({条件})	根据条件限制显示
-db.集合.find({},{字段1:1,字段2:0})	指定显示出来的字段信息
-	指定字段值为1代表只显示该字段，指定字段为0代表只不显示该字段
-	如果有一个字段最后设定值为1，那么设定0将无意义，因为除了设定显示的都不显示(之所以强调最后设定值，是一个重要注意点，详细解释在下面)
-db.集合.find().limit(数字)	限制输出多少行
-	如果数字大于20，那么也先只显示20行，然后再用it显示大于20小于指定值的部分
-	如果限制的值比查询得到的总值大，那限制就没有具体作用
-db.集合.find().skip(数字)	跳过前多少行还是查找读取
-	跳过前面n行，从第n+1行开始输出
-db.集合.find().sort(字段:升降序)	根据某个字段升降序排列输出
-	1代表升序，2代表降序
-可以一起使用： db.集合.find({条件},{字段1:1,字段2:0}).limit(数字).skip(数字).sort(字段:升降序)
+登陆后被强制设定密码的注意点：
+     1. 密码必须符合复杂性要求
+     2. 密码不能包含用户名
+     3. 密码错误超过3次，会弹出
+     4. 密码设定成功后，也会弹出，再次登陆就是使用新密码了
 
 
+特例：
+   如果root用户，被锁定了，这时候就没办法登陆root了，而只有root可以解锁，这就成了一个死循环，root被锁不能登陆，而想解锁必须先登陆root，解决方案如下：
+     首先，我们在做锁操作前必须思考再三，而且锁后也要确认一下，因为锁用户不会强制下线，所以操作要谨慎
+     再之，如果已经出现问题了，那就看看能不能通过密钥登陆，如果可以，那就可以补救
+     或者，就看也没有某个用户之前赋予了以root身份使用passwd *的权限，通过其实现
+     最后，前面的办法都没用，就重启机器，然后进入抢救模式，和破解root密码差不多的操作，然后解锁root，问题解决
 
 
-修改文档
-db.集合.update({条件},{修改字段:值,……})	修改符合条件的所有文档中的第一个文档，把里面所有数据清空，然后改为指定修改的字段
-	要注意两点，1.只作用于满足条件的第一个文档，2.修改字段会先删除其他的所有内容再添加，下面注意中有例子
-db.集合.update({条件},{修改字段:值,……},false,true)	修改符合条件的所有文档，把里面所有数据清空，然后改为指定修改的字段
-	可以和下面的修改操作连用，一般操作的时候都会加上这两个关键字
-db.集合.update({条件},{$set:{修改字段:值,……}})	修改符合条件的所有文档中的第一个文档，把指定字段修改后，不清空其他数据
-db.集合.update({条件},{$unset:{删除字段:值,……}})	修改符合条件的所有文档中的第一个文档，删除指定值的字段
-db.集合.update({条件},{$inc:{删除字段:数字,……}})	修改符合条件的所有文档中的第一个文档，让指定值的字段加上后面的数字
-db.集合.update({条件},{$push:{数组字段:值,……}})	修改符合条件的所有文档中的第一个文档，向数组添加新元素
-	如果添加的值是原来数组就有的也可以添加进去的
-db.集合.update({条件},{$addToSet:{数组字段:值,……}})	修改符合条件的所有文档中的第一个文档，向数组添加数组中不存在的新元素
-db.集合.update({条件},{$pop:{数组字段:数字,……}})	修改符合条件的所有文档中的第一个文档，删除数组中倒数第几个元素
-db.集合.update({条件},{$pull:{数组字段:值,……}})	修改符合条件的所有文档中的第一个文档，删除数组中指定值的元素
+文件系统安全
 
+   锁定文件
 
+   对EXT3/EXT4文件属性控制
+chattr  +-=属性              # 修改
+lsattr                   # 查看文件属性
+控制
++	在原来的的文件属性上添加一个属性，原来属性不变
+-	在原来的的文件属性上删除一个属性，如果没有，该操作无意义，不过不报错
+=	清空原来文件中所有属性，把=后面的属性加入
+	如果=后面为空，其作用就是清空文件属性
+属性
+	空代表没有特殊控制
+i	不可变，不能进行任意的写操作，不能mv、rm等
+a	仅仅可以追加，只能用 >> 进行重定向追加操作
+c	文件在磁盘上由内核自动进行压缩处理
 
-删除
-db.集合.drop()	删除集合，包括集合内容以及索引
-db.集合.remove({条件})	删除集合中指定的文档
-	db.集合.remove({})  删除集合中所有内容，但是索引依然存在
+   注意： 当一个文件属性中有i和a两个属性的时候，将只有i的作用，a的权限将被忽略
 
+[root@client50 ~]# chattr =a /mnt/test.txt 
+[root@client50 ~]# lsattr /mnt/test.txt
+-----a---------- /mnt/test.txt
+[root@client50 ~]# echo 1> /mnt/test.txt
+-bash: /mnt/test.txt: 不允许的操作
+[root@client50 ~]# echo 1>> /mnt/test.txt
+[root@client50 ~]# chattr +i /mnt/test.txt 
+[root@client50 ~]# lsattr /mnt/test.txt
+----ia---------- /mnt/test.txt
+[root@client50 ~]# echo 1>> /mnt/test.txt
+-bash: /mnt/test.txt: 权限不够
+[root@client50 ~]# chattr = /mnt/test.txt
+[root@client50 ~]# lsattr  /mnt/test.txt
+---------------- /mnt/test.txt
 
-
-
-
-
-匹配条件(不单独使用，在其他语句中的条件栏写如下内容，当然大括号不要重复，拿上面的{条件}和下面进行替换，因为下面写了大括号了)
-{字段:值}	相等匹配
-{字段1:值1,字段2:值2……}	多个字段值都相等的时候匹配
-{字段:{$in:[值1,值2……]}}	字段等于这么多值中的一个就匹配(这么多值可以有相等的情况，但是毫无意义)
-{字段:{$nin:[值1,值2……]}}	字段等于这么多值中的一个就不匹配，和里面完全不同的才匹配
-{$or:[{字段1:值1},{字段2:值2}……]}	多个字段值中有一个相等的时候匹配
-{字段:/正则表达式/}	正则匹配
-	注意只有字符类型数据才会参与正则匹配
-{字段:{$数值匹配符号:数字}}	数值的大小比较
-	$lt    $lte    $gt    $gte    $ne
-	小于    小于等于   大于    大于等于  不等于
-	{字段:{$gte:10,$lte:50}}  字段值 大于等于10、小于等于50 匹配
-{字段:null}	匹配值为空，或者某个文档中没有该字段
-
-这些匹配条件可以混用，基本组合可以得到想要的检索出来的数据。
+控制服务
+RHEL6	RHEL7	作用
+service 服务 start	systemctl start 服务	开启服务
+service 服务 stop	systemctl stop 服务	停止服务
+chkconfig 服务 on	systemctl enable 服务	开机自动启动服务
+chkconfig 服务 off	systemctl disable 服务	不开机自动启动服务
 
 
 
@@ -152,65 +99,115 @@ db.集合.remove({条件})	删除集合中指定的文档
 
 
 
+登陆安全
 
+whoami	查看当前用户
+su 用户	切换用户，当前所在目录不变，shell环境不变($PATH等)
+su - 用户	切换用户，并且当前所在目录切换到用户的家目录，以及shell环境
+su - 用户 -c "命令"	不切换用户，只是切换用户的shell环境，执行命令，然后返回命令返回值
+tail -f /var/log/secure	动态监听用户相关的所有操作
 
+    很多时候，告知他人某个用户密码会使其拥有用户的所有权，尤其是root，但是有的时候我们又需要把root部分权限分享给某写用户，这时候，就涉及到提权操作
+    提权操作，全程提升权限执行操作，也就是root根据需求对个别用户赋予提权操作的权限，之后用户就可以以指定用户的权限执行某些操作
+    举个例子，加入root赋予用户user2可以以用户user的身份执行 vim /home/user/* ， 那就意味着，user2可以在登陆自己的账户。然后修改原来自己不能进入的/home/user/目录下所有文件。
+
+which 命令	查找到命令的绝对路径
+visudo	管理员配置提权的命令
+vim /etc/sudoers
+sudu -u 用户 命令	根据管理员设定的提权信息，以命令中-u后面用户的身份运行后面的命令
+	不写 -u 用户 则 等效于 -u root，也就说不指定用户，默认以root身份
+	所有操作都要注意必须是管理员设置量提权的才可以
+sudo -l	列出当前用户所有可以使用的提权操作
+
+   设置提权其实就是修改配置文件，而且修改后立刻生效
+
+/etc/sudoers的详解
+
+# 可以设置别名
+Host_Alias 设置主机的别名 = 主机名1, 主机名2
+User_Alias 设置用户、组的别名 = 用户1, 用户2 ,%组1 ……
+Cmnd_Alias 设置命令的别名 = (用户1)命令1, (用户2)命令2
+
+用户别名  主机别名=命令别名
+
+# 在配置文件中有注释，写了一部分命令的别名，比如，下面就是软件包操作的命令集合的别名
+## Installation and management of software
+# Cmnd_Alias SOFTWARE = /bin/rpm, /usr/bin/up2date, /usr/bin/yum
+
+## Allow root to run any commands anywhere 
+root    ALL=(ALL)       ALL
+提权的用户名     localhost,主机名=(用户)命令的绝对路径 相关参数 ,(用户)命令的绝对路径 相关参数
+
+# 每行行首 如果由%开头代表后面操作的是一个组，不过必须先注释wheel那行，因为赋予一个组root全部权限很不安全
+## Allows people in group wheel to run all commands
+# %wheel ALL=(ALL)       ALL
+%提权用户组        localhost,主机名=(用户)命令的绝对路径 相关参数 ,(用户)命令的绝对路径 相关参数
+
+# 开启日志记录功能，所有用户用sudo进行提权操作都会记录下来
+Defaults logfile="/var/log/sudo"
 
 注意：
-    1. 字段_id是一个文档的唯一标识，可以是对象类型，也可以是其他类型，反正必须满足不能一样
-    2. 如果添加或者修改的时候在一个文档的内容中先后添加两个一样字段名，后者覆盖前者，不单单限于文档的修改，诸多涉及字段赋值都有这个特性，比如查询设置条件，排序等等，举例如下
-
-# 最后只显示了name字段，等价于 db.passwd.find({},{name:1})
-rs1:PRIMARY> db.passwd.find({},{_id:1,name:1,_id:0})
-{ "name" : "root" }
-{ "name" : "bin" }
-
-# 虽然有_id设为只显示，但后来被修改了，最终设定值就变为0了，最就是只不显示name和_id，也就等价于 db.pdb.passwd.find({},{name:0,_id:0})
-rs1:PRIMARY> db.pdb.passwd.find({},{_id:1,name:0,_id:0})
-{ "password" : "x", "uid" : 0, "gid" : 0, "comment" : "root", "homedir" : "/root", "shell" : "/bin/bash" }
-asswd.find({},{_id:1,name:0,_id:0})
-
-# 最后条件就变成了name是adm的文档内容，等价于 db.passwd.find({name:'adm'},{name:1})
-rs1:PRIMARY> db.passwd.find({name:'root',name:'adm'},{name:1})
-{ "_id" : ObjectId("5bdc0e50071f0652a84bc6a1"), "name" : "adm" }
-
-       可以理解为，任何语句中出现 {字段:值1,字段:值2,字段:值3} 的时候，可以将其等价为 {字段:值3}，很重要，但是请注意，字段一样的时候才成立，不过还是尽量不要这么写，因为浪费资源
-    3. 所有的修改操作save、update没有特殊设定的时候默认都是覆盖修改，其操作过程是先删除文档中的所有数据，再添加指定的值；而且都只能操作修改一个文档
-# 现在就update进行操作示范
-
-rs1:PRIMARY> db.example.find()
-{ "_id" : ObjectId("5bdd53b86be3955fa462fda2"), "name" : "test1", "gold" : "90" }
-{ "_id" : ObjectId("5bdd53bd6be3955fa462fda3"), "name" : "test2", "gold" : "80" }
-{ "_id" : ObjectId("5bdd53c16be3955fa462fda4"), "name" : "test3", "gold" : "70" }
-rs1:PRIMARY> db.example.update({name:'test1'},{gold:'100'})
-WriteResult({ "nMatched" : 1, "nUpserted" : 0, "nModified" : 1 })
-rs1:PRIMARY> db.example.find()
-{ "_id" : ObjectId("5bdd53b86be3955fa462fda2"), "gold" : "100" }
-{ "_id" : ObjectId("5bdd53bd6be3955fa462fda3"), "name" : "test2", "gold" : "80" }
-{ "_id" : ObjectId("5bdd53c16be3955fa462fda4"), "name" : "test3", "gold" : "70" }
-
-# 这里我们看到修改后，原来test1修改后name字段没了，只有设置修改只剩余gold字段，解决方案是$set
-
-rs1:PRIMARY> db.example.update({},{name:'test'})
-WriteResult({ "nMatched" : 1, "nUpserted" : 0, "nModified" : 1 })
-rs1:PRIMARY> db.example.find()
-{ "_id" : ObjectId("5bdd53b86be3955fa462fda2"), "name" : "test" }
-{ "_id" : ObjectId("5bdd53bd6be3955fa462fda3"), "name" : "test2", "gold" : "80" }
-{ "_id" : ObjectId("5bdd53c16be3955fa462fda4"), "name" : "test3", "gold" : "70" }
-
-# 这里我们看到没有条件，那么三个文档都匹配，但只有第一个文档被修改了，解决方案是  false,true
-
-    4. 修改文档内容中，所有 $关键字 连接的数据，都是只修改指定字段，不会删除其他部分
-
-    5. 修改文档中的pop删除数组元素，是从最后开始数，
-db.集合.update({条件},{$pop:{数组字段:1}})      # 删除数组的最后一个元素
-db.集合.update({条件},{$pop:{数组字段:-1}})     # 删除数组的第一个元素
+    1. 使用的时候可以不写绝对路径，但是配置的时候必须是命令的绝对路径
+    2. 配置文件中，相关参数可以用*，来做通配任意多个任意字符
+    3. 如果想用多个组，设置User别名，只需要在每个具体组名前加上一个%即可
 
 
 
 
 
 
+ssh
+    控制其他机器远程访问本机器，提高安全性
+修改配置文件/etc/ssh/sshd_config
+配置信息	功能解释
+Port 端口	设置ssh监听的端口，修改成非22端口，别的机器远程，就要 ssh -p 端口 IP 才可以登陆量
+	默认是注释了的，因为没有指定的时候是22端口
+ListenAddress 其他服务器IP列表	设置允许远程访问来的的机器的IP列表
+	默认也是注释的，没有定义的时候，默认允许所有的IP远成分访问
+PermitRootLogin yes	是否允许root远程登陆，如果是no就是不允许
+	默认被注释量，没有定义的时候，默认是yes，也就是允许root远程登陆
+LoginGraceTime 2m	登陆限制时间，也就是用户输入密码等待时间太久，服务器会断开
+	这样不管密码对不对输入密码超时都会拒绝连接
+MaxAuthTries 6	设定最大密码验证次数
+	不过当设定值超过3的时候，也值能输入错误3次，否则报错
+AllowUsers 用户1@登陆使用的主机IP 用户1	设置白名单，只有通过指定的指定的主机登陆对应的用户才能登陆成功
+	如果没有@ ，默认是允许所有的主机登陆该用户访问
+AllowGroups 组名1 组名2	设置组内所有成员的一个白名单	
+DenyUsers 用户1@登陆使用的主机IP 用户1	设置黑名单，只要用户不以指定的主机登陆指定用户就可以正常登陆
+	如果没有@ ，默认是不允许所有的主机登陆该用户访问
+DenyGroups 组名1 组名2	设置组内所有成员的一个黑名单	
 
+PasswordAuthentication yes	指定能否用密码登陆，默认是yes，也就是允许的
+	如果改为no，那么远程访问值能通过密钥进行连接
+
+
+特例：
+    1. 当AllowUsers和DenyUsers同时存在，不管哪个在前哪个在后，都是只要Deny明确拒绝了某个用户，这个用户就不能登陆，而AllowUsers列表以外的用户也是不能登陆的
+    2. 当一个用户属于一个组，这个组设置允许登陆，用户设置不能登陆，结果这个用户是不能登陆，这个用户设置允许登陆，组设置不能登陆，结果这个用户是不能登陆，总结下来对于一个用户，不管其对其所属组还是直接对用户，Deny会覆盖Allow的设置
+
+    举例：假设当前有3个用户：tes1、test2、test3； test1和test2属于组test，test3没有所属组
+
+配置文件中的内容	test1能否登陆	test2能否登陆	test3能否登陆
+AllowUsers test1	能	不能	不能
+AllowGroups test	能	能	不能
+AllowUsers test3	能	能	能
+AllowGroups test
+
+DenyUsers test1	不能	能	能
+DenyGroups test	不能	不能	能
+DenyUsers test3	不能	不能	不能
+DenyGroups test
+
+AllowUsers test1 test2	不能	能	不能
+DenyUsers test1
+AllowGroups test	不能	能	不能
+DenyUsers test1
+AllowUsers test1 test2	不能	不能	不能
+DenyGroup test
+AllowUsers test1 test3	不能	不能	能
+DenyGroup test
+
+密钥验证
 
 
 
