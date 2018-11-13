@@ -1,221 +1,176 @@
+显示英文版本帮助
+   LANG=en_US.UTF-8 命令 --help
+显示中文版本帮助
+   LANG=zh_CN.UTF-8 命令 --help
 
 
-ftp共享服务
-    基本配置就不细述，主要将一下，如何实现允许匿名登陆上传数据
-    只需要再服务器上 修改配置文件/etc/vsftpd/vsftpd.conf ，再重启服务
-sed -i '/anon_upload_enable/canon_upload_enable=YES' /etc/vsftpd/vsftpd.conf
-
-    客户端使用ftp命令访问ftp服务器
-[root@client ~]# ftp 服务器FTP的IP
-# 输入用户名，如果是匿名用户，输入ftp
-Name (192.168.4.50:root): ftp
-331 Please specify the password.
-
-# 输入密码
-Password:
-
-# 下面的提示，表示登陆成功，就可以进行相关操作了
-230 Login successful.
-Remote system type is UNIX.
-Using binary mode to transfer files.
-
-客户端ftp内的操作命令
-ls	查看ftp服务器中当前目录下，有哪些文件或目录
-cd	切换ftp服务器中的目录位置，用于进入ftp服务器中的一些字目录
-lcd	切换当前机器的目录，用于确定下载文件到本机的什么位置，以及上传本机什么目录下的文件
-get	下载当前所在ftp服务器目录下的某个文件，到当前所在的本机目录
-put	上传当前本机所在目录下的指定的一个文件，到当前所在ftp服务器的目录喜爱
-exit	退出，两个命令作用一样
-bye
-
-   如果想进行上传等操作，服务端需要修改bool值，将其开启才可以实现原称
-    ftpd_anon_write  ftpd_full_access
 
 
-Selinux
+虚拟化
+    定义： 把一个或者多个物理资源转换成一个或者多个逻辑资源，这些逻辑资源就可以用来创建虚拟机
+    详细解释： 可以一个物理机中创建多个虚拟机，也可以多个物理机转换成一个虚拟机，但是因为网络速度远远打不到CPU的运行速度，所以一般不把多个真机制作为一个虚拟机
+    一般 Linux 使用 KVM虚拟化
 
-   简介： 一个强化Linux安全的拓展模块，它是当客户端通过防火墙后，抵达服务器后访问服务的时候进行工作，主要是为了给操作系统提供可定制的策略，管理工具
-
-   三种状态：
-enforcing	强制模式，会强制停止不符合策略的操作或服务
-permissive	宽松模式，会检测并警告一些不符合策略的操作，极少情况下拒绝某些操作
-disabled	关闭模式，不启用Selinux
-
-
-   模式控制：
-targeted	仅保护最常见的网络服务(默认、推荐)
-minimum	折中的操作
-mls	多层级保护，保护系数高，但是会降低访问的速率
-
-   安全上下文
-      属性构成： 用户:角色:访问类型:选项
-      查看安全上下文的属性：
-ls -Z 文件
-      操作的一般规律：
-          1. 使用移动命令的时候，文件原有的上下文值不变
-          2. 执行复制操作的时候，文件会自动目标位置的父目录的上下文
-          3. 创建一个文件，文件也是获取父目录的上下文值
-
-      设置上下文：
-chcon -t 安全上下文的访问类型 文件
-chcon -R -t 安全上下文的访问类型 目录
-      恢复上下文(让文件的上下文与其当前所在父目录相同)
-restorecon  文件
-restorecon -R 目录
-# 下次重启机器后，重置所有的上下文值
-echo >  /.autorelabel
-
-注意：
-   1. 建议先查看其预备存储的目录的上下文，然后考虑移动后文件的上下文是否改为一样
-   2. 移动复制的上下文规律一般都是那样，不会变，但是也有特例
-
-   布尔值
-      简介： 设置服务的某些功能的开与关
-      查看布尔值：
-getsebool -a
-getsebool -a | grep 关键字
-# 返回的数据的含义是：  布尔参数 --> on|off
-
-      修改布尔值：
-setsebool 布尔参数 on|off
-
-   监控程序(用于服务因Selinux出现一些问题的解决)
-     1. 安装setroubleshoot包
-     2. 当出现问题了，查看日志信息
-grep shoot /var/log/messages
-     3. 然后，看看错误位置，会提示运行什么程序，将run后面的命令，复制执行
-run: sealert -l 6cd83e12-06b5-4ae5-bd0f-25b755ef2b14
-     4. 根据提示，一个一个把所有命令执行一遍，就能解决问题
-
-
-加密解密
-
-   目的： 保证数据再传递过程中的的安全性，完整性
-   加密解密的原理：
-      发送方把要发送的文件，通过某个技术进行加密，然后发送给接收方，接收方再通过相应的技术进行解密，只不过，双方的加密解密技术实现商量好了，发送方加密的东西接收方能且只有其能解密
-   完整性：
-      如果说文件加密是为了文件的安全，那加密签名技术就是专门为了完整性设计的
-      除了签名，还可以使用MD5进行完整性检验，这软件是通过一个算法得到一个只与文件内容相关的校验码，如果数据有一点不同，那么校验码也会有不一样，反之如果校验码完全相同，那么数据也会一模一样，所以用户也可以手动用md5sum命令生成校验值进行比较。
-   算法：
-对称加密	DES、AES	加密解密是使用一个算法
-非对称加密	RSA、DSA	加密解密是两个不同的算法，加密算法不能解密
-
-GPG加密
-   简介： 当前最流行的数据加密、数字签名工具
-   安装软件： yum install -y gnupg
-
-   安装后就可以进行加密和解密量，下面进行操作分析，现在假定A用户要给B用户发送一个文件，希望加密传递，两个加密的操作过程如下
-   对称加密：
-      原理： A用户用密码加密一个文件，只需要告知B用户密码，B即可解密
-# 使用命令 (会生成一个 文件名.gpg 的文件)
-[root@A ~]# gpg -c 加密文件名
-
-                        lqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqk
-                        x 请输入密码                                          x
-                        x                                                     x
-                        x                                                     x
-                        x Passphrase ________________________________________ x
-                        x                                                     x
-                        x	<OK>                             <Cancel>     x
-                        mqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqj
-
-# 加密后，A用户把加密得到的文件发给B用户即可，B用户解密的时候有密码即可
-
-
-   非对成加密：
-     原理： B用户生成一个密钥对，然后把公钥发给A用户，A用户用公钥加密然后把加密文件给B，B再拿自己的私钥解密即可
-      1. 用户B生成密钥对
-[root@B ~]# gpg --gen-key
-      2. 用户B导出公钥(公钥名字自定义)
-[root@B ~]# gpg --export -a > 公钥文件名
-# 运行后，会要求选择加密算法，加密长度(越长生成速度越慢、同样越安全)
-# 然后会要求属于name、mail等标签，可以任意写，但要记住，后来会组成一个字符串用来标示密钥对
-# 字符串内容组成为： 名字 (注释) <邮箱>
-# 最后输入：O(大写的o) 确认生成
-# 然后要求输入密码，这个密码就是用来保护私钥，下次调用私钥解密的时候需要输入这个密码
-
-      3. 把公钥发给A用户
-      4. 用户A导入公钥
-[root@A ~]# gpg --import 用户A发的公钥文件的绝对路径
-      5. 用户A利用公钥加密(生成一个 文件.gpg文件，将其发给其他用户)
-[root@A ~]# gpg -e -r 公钥中的任意一个标示 加密文件名
-
-   解密：
-[root@B ~]# gpg -d 文件名
-      对称和非对称加密，其解密都是一样的命令，不同的是：
-         对称加密解密的时候，密码是加密方设定的 
-         非对称加密解密的时候，密码是自己设定的(目的是保护私钥)
-
-   签名：
-     作用：保证服务端发送的软件包完整安全可靠，软件公司就会官方把公钥、签名和软件发布出来，用户受到后，就可以用签名和公钥检查软件的完整和准确性
-     原理：B用户用私钥对一个文件进行签名，然后把签名文件和源文件一起发给A用户，A用户用公钥检查签名，如果正常，那文件就是B用户传来的
-     1. 用户B生成公私钥，把公钥发给A用户，A用户完成导入(上面非对称加密的操作)
-     2. 用户B生成签名文件，把文件和签名文件发给用户A
-[root@B ~]# gpg -b  被签名的文件
-     3.  通过签名文件和公钥检测
-[root@A ~]# gpg --verify 签名文件.sig 源文件
-     *. 可以更深层次核实签名的可靠性，通过 主钥指纹，A用户检查签名后就会提示除指纹，只要和用户B生成密钥的指纹对比一下，如果一样那么签名就可信
-# 检查私钥所在用户的指纹信息，接收方运行检测签名的时候就会显示指纹
-[root@B ~]# gpg --fingerprint
+各个公司的虚拟化软件
+VMware	VMware Workstation、vSphere
+Microsoft	VirtualPC、Hyper-V
+RedHat	KVM、RHEV
+Citrix	Xen
+Oracle	Oracle VM VirtualBox
 
 
 
 
 
-入侵检测
+KVM虚拟化
+    简介：KVM只是一个linux的内核模块，是内核用来实现虚拟化的一个技术模块，具体操作需要其他软件辅助完成，它的使用需要 CPU 的支持，通过一些硬件相关技术打成虚拟化，包括CPU方面的Intel-VT,AMD-V、以及内存相关的Intel的 EPT 和 AMD 的 RVI
+！
+    仿真工具Qemu ，用于操作内核运行的工具，
+    接口工具Libvirt
+    关系
 
-    原理： 按时给一个文件进行一个数据备份存储，通过aide软件，将其制作为一个文件，定时用aide软件对比当前系统中多个目录是否被修改过，如果被修改了且确定不是自己的操作，就是被入侵了，这时候aide会告知什么文件出了问题
-
-    配置：
-      1. 装包
-yum install -y aide
-      2. 配置，修改配置文件/etc/aide.conf，及其详解
-
-# 定义aide的工作目录
-@@define DBDIR /var/lib/aide
-@@define LOGDIR /var/log/aide
-
-# 定义检测是否入侵的时候，对比的基础文件名
-# The location of the database to be read.
-database=file:@@{DBDIR}/aide.db.gz
-
-# 定义运行aide的时候，当前系统状态的文件，建议改为和上面的基础文件名一样
-#database_out=file:aide.db.new
-database_out=file:@@{DBDIR}/aide.db.new.gz
-
-# 然后会对检测什么参数做定义
-
-# 定义多个别名，下面列举的叫FIPSR，其作用是检测几乎所有
-FIPSR = p+i+n+u+g+s+m+c+acl+selinux+xattrs+sha256
-
-# 最后从100行左右开始，是定义检测什么目录内容，检测什么方面内容，一般不需要检测这么多，建议注释掉，然后写自己需要检测的目录
-目录   检测什么内用
-/etc/  FIPSR
-
-      3. 初始化，启动检测
-aide --init
-# 会按照配置文件中写的配置，在工作目录下创建对应名字的文件
-
-      4. 备份生成的数据文件，并且把工作目录下的数据文件改名为配置文件中，用于对比的基础文件名
-
-      5. 觉得被入侵的时候，进行检测
-aide -C
-# 之后系统会检测所有配置文件中指定的目录，如果被修改了，会提示哪个被修改了，改成什么了
+！
+    安装软件： qemu-kvm libvirt-daemon libvirt-client libvirt-daemon-diver-qemu
+    选择安装： 
 
 
-NMAP扫描
-    简介： 一个强大的网络探测设备，支持多种探测(PING、端口、TCP/IP)
-    安装相关软件： yum install -y nmap
 
-    命令中的IP可以有很多表达方式：
-        1. 一个主机的IP，那么扫描只查看该主机的信息
-        2. 一个网段 例如172.10.110.0/24 ，那么就是扫描数据从172.10.110.0 到 172.10.110.255，查看这256个主机
-        3. 一个网络范围 例如 172.10.110.10-20，那么就是扫描数据 172.10.110.10 到 172.10.110.20，查看这11个主机
-用法	作用
-nmap -sS IP	TCP扫描各个主机，只不过三次握手只做前面两部
-nmap -sT IP	TCP扫描各个主机，并且连接的时候完成完整的三次握手
-nmap -sP IP	只进行ping操作扫描
-nmap -A IP	进行最完整的全系统检测，检测服务的启动情况等等
+
+
+virsh命令
+    命令格式： virsh  控制命令  虚拟机  参数
+
+virsh nodeinfo	查看KVM节点信息
+virsh list	列出开启的虚拟机
+virsh list --all	列出所有虚拟机(包括没有开启的)
+virsh net-list	列出启用的虚拟网络(虚拟交换机)
+	一个虚拟网络可以理解为一个交换机，网络交互和物理机器一样的原理，连一个虚拟交换机就是连在一个交换机上，从而可以通信
+virsh net-list --all	列出所有虚拟网络(包括没有开启的)
+virsh dominfo 虚拟机	查看某个虚拟机的信息(包括没有开启的)
+virsh start 虚拟机	使虚拟机开机
+virsh reboot 虚拟机	使虚拟机关闭
+virsh shutdown 虚拟机	使虚拟机关机(自动关闭服务并关机)
+virsh destroy 虚拟机	使虚拟机强制关机(直接切断电源)
+virsh autostart 虚拟机	设置虚拟机为真机开机(通电)自启动
+
+
+
+！
+镜像盘
+
+
+
+/var/lib/libvirt/images/
+qemu-img命令
+
+    后端模板文件
+
+
+
+
+
+
+
+
+
+/etc/libvirt/qemu/networks/vbr.xml
+！！！！！！
+<network>
+  <name>名字(net-list查看的)</name>
+  <bridge name='名字(ifconfig查看的)' stp='on' delay='0'/>
+  <domain name='名字(net-list查看的)'/>
+  <forward mode="nat"/>
+  <ip address='192.168.4.254' netmask='255.255.255.0'>
+    <dhcp>
+      <range start="192.168.1.100" end="192.168.1.200"/>
+    </dhcp>
+  </ip>
+</network>
+
+
+
+
+
+
+<domain type='kvm'>
+  <name>名字</name>
+  <memory unit='KB(后面内存的单位)'>最大内存使用量</memory>
+  <currentMemory unit='KB(后面内存的单位)'>当前内存使用量(一般等于最大内存)</currentMemory>
+  <vcpu placement='static'>具体cpu个数</vcpu>
+  <os>
+    <type arch='x86_64(操作系统格式)' machine='pc'>hvm</type>
+！    <boot dev='hd(从硬盘引导、cd-rom是从光驱引导)'/>
+    <bootmenu enable='yes'/>
+    <bios useserial='yes'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+  <cpu mode='host-passthrough(使用真机cpu，也可以用虚拟cpu用于配置指令级)'>
+  </cpu>
+  <clock offset='localtime(使用系统事件)'/>
+  <on_poweroff>destroy(强制关机命令)</on_poweroff>
+  <on_reboot>restart(重启命令)</on_reboot>
+  <on_crash>derestart(强制重启命令)</on_crash>
+  <devices>
+    <emulator>/usr/libexec/qemu-kvm(用什么程序来模拟虚拟机)</emulator>
+
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='/var/lib/libvirt/images/node.img'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
+
+    <interface type='bridge'>
+      <source bridge='vbr(虚拟交换机名)'/>
+      <model type='virtio'/>
+    </interface>
+
+    <channel type='unix'>
+      <target type='virtio' name='org.qemu.guest_agent.0'/>
+    </channel>
+    <serial type='pty'></serial>
+    <console type='pty'>
+      <target type='serial'/>
+    </console>
+    <memballoon model='virtio'></memballoon>
+  </devices>
+</domain>
+
+
+
+
+搭建一个虚拟
+
+
+yum install -y bash-completion
+
+
+一个机器只能有一个网关，而不是一个网卡接口一个网关
+
+
+
+
+
+
+console
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
