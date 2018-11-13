@@ -1,0 +1,9 @@
+#!/bin/bash
+if [ -d /public/git/nsd1807/ ];then
+  cd /public/git/nsd1807/
+  git pull
+else
+  cd /public/git/
+  git clone git://124.193.128.166/nsd1807.git
+fi
+
