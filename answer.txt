@@ -1,198 +1,134 @@
+JSON文件格式
+ 
+    简介： JSON是JavaScript对象表示法,它是一种基于文本独立于语言的轻量级数据交换格式
+
+   JSON中的分隔符限于
+单引号" ' " 双引号 " ' "	用来规划一个数据值
+小括号" () "	分组使用
+中括号" [ ] "	定义一个数组，用逗号分隔	[ "k1":"v1" , "k2" , "kn" ]
+大括号" { } "	多个键值对，用逗号分隔	{ "k1":"v1" , "k2":"v3" , "kn":"vn" }
+冒号 " : " 	一个键值对，
+逗号 " , "	分隔数据用的
+
+   注意： 空格是没有限制要求的，也不写都一样，空格不算一个分隔符号。
+          如果想让空格成为一个字符，要用\转义，也就是 "\    " 代表一串空格字符。
+
+JSON由简到繁的演变过程
 
 
-环境准备：
+# 一个数据库，它里面由MySQL
+{
+   "数据库" : "MySQL"
+}
 
-   1. 服务器openstack，10G内存，系统存储50G，存储空盘20G，两个网卡
-# 修改虚拟机的xml文件的memory、currentMemory、disk、需要再复制写一组disk文件、再写一个interface
-virsh edit openstack
-……
-  <memory unit='KiB'>9961472</memory>
-  <currentMemory unit='KiB'>9961472</currentMemory>
-……
-    <disk type='file' device='disk'>
-      <driver name='qemu' type='qcow2'/>
-      <source file='/var/lib/libvirt/images/node1.img(存储镜像盘的位置)'/>
-      <target dev='vda' bus='virtio'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
-    </disk>
-    <disk type='file' device='disk'>
-      <driver name='qemu' type='qcow2'/>
-      <source file='/var/lib/libvirt/images/disk.img(存储镜像盘的位置)'/>
-      <target dev='vdb' bus='virtio'/>
-    </disk>
-……
-    <interface type='bridge'>
-      <mac address='52:54:00:54:74:22'/>
-      <source bridge='net1网络名'/>
-      <model type='virtio'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
-    </interface>
-    <interface type='bridge'>
-      <source bridge='net2网络名'/>
-      <model type='virtio'/>
-    </interface>
-……
+# 一个数据库，它里面由MySQL,MongoDB,Redis
+{
+   "数据库" : [ "MySQL" , "MongoDB" , "Redis" ]
+}
 
-前往虚拟机配置新网卡的IP地址
-
-   2. 节点端nova，5G内存，系统存储50G，两个网卡(和服务器openstack的网卡可以互通)
-# 修改虚拟机的xml文件
-……
-  <memory unit='KiB'>5242880</memory>
-  <currentMemory unit='KiB'>5242880</currentMemory>
-……
-    <disk type='file' device='disk'>
-      <driver name='qemu' type='qcow2'/>
-      <source file='/var/lib/libvirt/images/node1.img(存储镜像盘的位置)'/>
-      <target dev='vda' bus='virtio'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
-    </disk>
-……
-    <interface type='bridge'>
-      <mac address='52:54:00:54:74:22'/>
-      <source bridge='net1网络名'/>
-      <model type='virtio'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
-    </interface>
-    <interface type='bridge'>
-      <source bridge='net2网络名'/>
-      <model type='virtio'/>
-    </interface>
-……
+# 一个数据库，它里面由MySQL,MongoDB,Redis，而MySQL它详细信息为，关系型数据库，其市场上的主流软件为Mariadb,Oracle。
+{
+   "数据库" : [ 
+    { "MySQL" : "关系型数据库" , "市场软件" : [ "Mariadb" , "Oracle" ] },
+    "MongoDB" ,
+    { "Redis" : { "非关系型数据库" : "NoSQL" } }
+    ]
+}
 
 
-   3. 为两台服务器配置yum源(包括centos7、rhel7-extras、rhel7OSP-10的十个yum库)
-
-   4. 检查环境搭建问题
-     4.1 是否禁用selinux
-     4.2 是否关闭firewalld和NetworkManager
-     4.3 检查配置主机网络参数(静态IP)
-     4.4 检查配置主机yum源(12个)
-     4.5 检查公钥是否导入(保险其见，部署yum的公钥导入)
-     4.6 检查NTP和DNS服务器是否可用
-
-
-
-搭建OpenStack服务器
-
-   1. 配置LVM逻辑卷，作为云盘的存储位置
-[root@openstack ~]# yum install -y lvm2
-pvcreate /dev/物理磁盘名(添加的那个20G的空盘)
-vgcreate cinder-volumes /dev/物理磁盘名
-# 卷组名字必须是cinder-volumes
-
-   2. 安装依赖包 ( KVM的四个必备软件[KVM篇有写]、Python工具包 )，两个机器都要装
-[root@openstack ~]# yum install -y qemu-kvm libvirt-client libvirt-daemon libvirt-daemon-driver-qemu python-setuptools
-[root@nova ~]# yum install -y qemu-kvm libvirt-client libvirt-daemon libvirt-daemon-driver-qemu python-setuptools
-
-   3. 安装packstack(只在openstack服务器上装)
-[root@openstack ~]# yum install -y openstack-packstack
-
-   4. 部署packstack应答文件
-[root@openstack ~]# packstack --gen-answer-file answer.ini(应答文件名字)
-
-sed -i '/^CONFIG_DEFAULT_PASSWORD=/cCONFIG_DEFAULT_PASSWORD=SmartLyu' answer.ini
-sed -i '/^CONFIG_SWIFT_INSTALL/cCONFIG_SWIFT_INSTALL=n' answer.ini
-sed -i '/^CONFIG_NTP_SERVERS/cCONFIG_NTP_SERVERS=192.168.1.254' answer.ini
-sed -i '/^CONFIG_CINDER_VOLUMES_CREATE/cCONFIG_CINDER_VOLUMES_CREATE=n' answer.ini
-sed -i '/^CONFIG_NEUTRON_ML2_TYPE_DRIVERS/cCONFIG_NEUTRON_ML2_TYPE_DRIVERS=flat,vxlan' answer.ini
-sed -i '/^CONFIG_NEUTRON_ML2_VXLAN_GROUP/cCONFIG_NEUTRON_ML2_VXLAN_GROUP=239.1.1.5' answer.ini
-sed -i '/^CONFIG_NEUTRON_OVS_BRIDGE_MAPPINGS/cCONFIG_NEUTRON_OVS_BRIDGE_MAPPINGS=physnet1:br-ex' answer.ini
-sed -i '/^CONFIG_NEUTRON_OVS_BRIDGE_IFACES/cCONFIG_NEUTRON_OVS_BRIDGE_IFACES=br-ex:eth0' answer.ini
-sed -i '/^CONFIG_NEUTRON_OVS_TUNNEL_IF/cCONFIG_NEUTRON_OVS_TUNNEL_IF=eth1' answer.ini
-sed -i '/^CONFIG_PROVISION_DEMO=/cCONFIG_PROVISION_DEMO=n' answer.ini
+# 一个数据库，它里面由MySQL,MongoDB,Redis，而MySQL它详细信息为，关系型数据库，其市场上的主流软件为Mariadb,Oracle，其中，Mariadb是免费开源软件、Oracle是付费闭源软件，其开发公司为甲骨文
+{
+   "数据库" : [ 
+    {
+      "MySQL" : "关系型数据库" , 
+        "市场软件" : [
+          { "Mariadb" : "免费开源" },
+          { "Oracle" : "付费闭源" , "公司" : "甲骨文" }
+         ] 
+      },
+    "MongoDB" ,
+    { "Redis" : { "非关系型数据库" : "NoSQL" } }
+    ]
+}
 
 
-
-CONFIG_DEFAULT_PASSWORD	设置一个默认密码(一般不会使用，只有生成随机密码失败的时候使用)
-CONFIG_SWIFT_INSTALL	是否开启结合Ceph分布存储
-CONFIG_NTP_SERVERS	时间同步服务器的IP地址
-CONFIG_CINDER_VOLUMES_CREATE	是否自动创建cinder-volumes，位置空间随机(一般不开启，使用人工创建)
-CONFIG_NEUTRON_ML2_TYPE_DRIVERS	选择使用网络的格式: 'local','flat(公网使用的扁平网络)','vlan','gre','vxlan(内网用于相互隔离的网络，防止他人网络攻击)'
-CONFIG_NEUTRON_ML2_VXLAN_GROUP	设置组播地址：239开头的网络
-CONFIG_NEUTRON_OVS_BRIDGE_MAPPINGS	设置一个虚拟网络(交换机)，和不同虚拟网络不同是是让物理网卡成为一个该交换机的端口，这样让虚拟机可以和外界的物理机进行数据通信
-CONFIG_NEUTRON_OVS_BRIDGE_IFACES	把哪个真实网卡变成虚拟交换机的一个端口
-CONFIG_NEUTRON_OVS_TUNNEL_IF	让哪个网卡成为隧道网卡，和VPN理论相同，目的是让虚拟机可以和其他物理机的虚拟机进行通信
-CONFIG_PROVISION_DEMO	是否开启测试DEMO
-
-   5. 执行安装
-       先将注意点：
-          1. 执行前，把环境和应答文件检查一次
-          2. 一旦开始执行不可以用任何方法打断！！
-          3. 如果开启后发现有问题，唯一的解决方法是等待执行结束后报错，然后等程序结束后修改再重新执行操作
-[root@openstack ~]# packstack --answer-file answer.ini
-
- **** Installation completed successfully ******
-
-   6. 修正Horizon BUG
-sed -i '/WSGIProcessGroup/a\  WSGIApplicationGroup %{GLOBAL}' /etc/httpd/conf.d/15-horizon_vhost.conf 
-systemctl restart httpd
-
-   7. 获取管理员帐号密码，查看文件内容 /root/keystonerc_admin
+    其实原理比较简单，只不过可以反复嵌套，因此会生成很复杂的JSON文件
 
 
 
 
-Openstack
+YAML数据格式
+    实质是： 用来表达数据序列的格式
 
-    其工作原理就是，让一个真实机器中的一个虚拟机器共享出去，让用户在网络上使用访问，这就是云主机了
-    那么最大的难点也就是如何让虚拟机能和外界通信，这使用的是OVS网桥技术
+    基础语法：
+       1. YAML的结构通过空格来展示，不使用逗号！
+       2. 数组使用"- "来表示，注意是 减号空格
+       3. 键值对使用": "来表示，注意是 冒号空格
+       4. YAML使用一个固定的缩进风格表示数据层级结构关系
+       5. 一般每个缩进级别由两个以上空格组成
+       6. 使用 # 表示注释
 
-OVS网桥
-    工作原理是，搭建一个虚拟网络(交换机)，把一个物理网卡成为这个交换机的一个端口，这样，虚拟服务器就可以把数据给这个交换机再从这个端口把数据传递出去，实现和外界的通信。
-    在搭建Openstack后，指定的物理网卡会失去IP地址，转而由虚拟交换机获取该IP，实现虚拟机和外界真机的数据通信，而网络配置文件也会被修改，配置信息如下
+    注意:
+       不要使用tab,缩进是初学者容易出错的地方之一
+       同一层级缩进必须对齐
+       开头需要写 --- 表示文件开始
 
-虚拟交换机的网络配置文件
-/etc/sysconfig/network-scripts/ifcfg-br-ex 
-
-ONBOOT="yes"
-NM_CONTROLLED="no"
-IPADDR="192.168.1.1"
-NETMASK="255.255.255.0"
-GATEWAY="192.168.1.254"
-DEVICE=br-ex
-NAME=br-ex
-DEVICETYPE=ovs
-OVSBOOTPROTO="static"
-TYPE=OVSBridge
+YAML由简到繁的演变过程
 
 
+# 一个数据库，它里面由MySQL
 
-真实网卡的网络配置文件
-/etc/sysconfig/network-scripts/ifcfg-eth0
+"数据库": "MySQL"
 
-DEVICE=eth0
-NAME=eth0
-DEVICETYPE=ovs
-TYPE=OVSPort
-OVS_BRIDGE=br-ex
-ONBOOT=yes
-BOOTPROTO=none
+# 一个数据库，它里面由MySQL,MongoDB,Redis
 
+"数据库": 
+   - "MySQL"
+   - "MongoDB"
+   - "Redis"
 
-   搭建后，就可以使用网页进行访问了，然后进行操作(cloud_3)
+# 一个数据库，它里面由MySQL,MongoDB,Redis，而MySQL它详细信息为，关系型数据库，其市场上的主流软件为Mariadb,Oracle。
 
-非管理员用户具有以下权限
-– 启劢实例
-– 创建卷和快照
-– 创建镜像
-– 分配浮劢IP
-– 创建网络和路由器
-– 创建防火墙以及规则、规则策略
-– 查看网络拓扑、项目使用概况等
+"数据库": 
+   - "MySQL": "关系型数据库"
+     "市场软件":
+      - "Mariadb"
+      - "Oracle"
+   - "MongoDB"
+   - "Redis": "关系型数据库"： "NoSQL"
 
 
+# 一个数据库，它里面由MySQL,MongoDB,Redis，而MySQL它详细信息为，关系型数据库，其市场上的主流软件为Mariadb,Oracle，其中，Mariadb是免费开源软件、Oracle是付费闭源软件，其开发公司为甲骨文
+
+"数据库": 
+   - "MySQL": "关系型数据库"
+     "市场软件":
+      - "Mariadb": "免费开源"
+      - "Oracle": "付费闭源"
+        "公司" : "甲骨文"
+   - "MongoDB"
+   - "Redis": 
+      "关系型数据库"： "NoSQL"
 
 
-Glance磁盘格式
-• raw:非结构化磁盘镜像格式
-• vhd:VMware、Xen、Microsoft、VirtualBox等均
-支持的通用磁盘格式
-• vmdk:是Vmware的虚拟磁盘格式
-• vdi:VirtualBox虚拟机和QEMU支持磁盘格式
-• iso:光盘数据内容的归档格式
-• qcow2:QEMU支持的磁盘格式。空间自劢扩展,
-并支持写时复制copy-on-write
+
+JSON和YAML文件格式
+
+    这两个格式可以相互转换，JSON分隔符号比较多，{} []  ,  等，而YAML内只有空格作为分隔符号，由换行缩进代表层级内容；不过呢，YAML及其注重空格，所以书写的时候需要格外谨慎，而JSON却不用担心空格问题。
+
+    两者间的具体的转换可以这么分
+JSON	YAML	JSON示例	YAML示例
+逗号分隔	回车并设置格式缩进相同	{a,b}	a
+			b
+大括号用来集合多种值	换行缩进统一即可	{a:{k1:kk1},b:k2}	a:
+			  k1:kk2
+			b:k2
+中括号代表数组	用- 键名写多列统一缩进即可	[ a:[k1,k2],b:k2 ]	- a:
+			  - k1
+			  - kk2
+			- b:k2
+
+     大致总结如上，在具体描述JSON和YAML格式的时候，有写例子，例子是等价关系，可以辅助理解
 
 
 
@@ -200,14 +136,484 @@ Glance磁盘格式
 
 
 
-镜像容器格式
-• bare:镜像中没有容器或元数据封装
-• ovf:一种开源的文件规范,描述了一个开源、安全、
-有效、可拓展的便携式虚拟打包以及软件分布格式
-• ova:OVA归档文件
-• aki:亚马逊内核镜像
-• ami:亚马逊主机镜像
 
+
+
+
+
+
+Jinja2
+
+   模版基本语法
+      1. 模板的表达式都是包含在分隔符"{{  }}"内的
+      2. 控制语句都是包含在分隔符"{% %}"内的
+      3. 模板支持注释,都是包含在分隔符"{# #}" 内,支持块注释
+      4. 调用变量{{变量名}}
+      5. 计算{{数值1 运算符号 数值2}}，例如{{1*2}}
+      6. 可以使用过滤器进行修改，和Shell一样，使用符号 |  
+
+   模块控制语句
+{% if name == 'MySQL' %}
+    关系型数据库
+    {% for m in ["Mariadb","Oracle"] %}
+          {{do m}}
+{% elif name == 'Mongodb' %}
+    非关系型数据库
+{% elif name == 'Redis' %}
+    非关系型内存数据库
+{% else %}
+    不可编写数据库
+{% endif %}
+
+
+
+
+ansible的七个操作
+
+    1. ansible： 用于执行临时性的工作
+    2. ansible-doc： ansible模块的文档说明
+    3. ansible-console： ansible为用户提供的交互式工具
+    4. ansible-galaxy： 从github上下载管理Roles的一款工具
+    5. ansible-playbook： 日常应用中使用频率最高的命令
+    6. ansible-vault： 主要用于配置文件加密
+    7. ansible-pull： 适用于配置大批量机器的场景下，效率几乎可以无限提升,但对运维人员的技术水平和前瞻性规划有较高要求
+
+
+playbook
+
+
+playbook语法格式
+   因为playbook死由YAML语言编写，所以语法格式遵循YAML标准
+   playbook由一个或多个play组成，每个play中 hosts,variables,roles,tasks 等对象的表示方法都是键值中间以": "分隔表示
+
+   注意YAML格式的文件开始行都应该是 --- ，这是YAML格式的一部分,表明一个文件的开始
+   在使用的时候我们可以通过   ansible-doc 模块   来查看帮助信息，里面的EXAMPLES会有例子作为参考
+
+
+playbook构成
+hosts 内容是一个(多个)组或主机的patterns，以逗号为分隔符，如果使用all代表指代所有主机
+remote_user	指定登陆使用的账户
+target	定义将要执行playbook的远程主机组
+variable	定义playbook运行时需要使用的变量
+tasks	定义将要在远程主机上执行的任务列表
+Handler	定义task执行完成以后需要调用的任务
+
+
+   对于tasks模块注意点
+       1. 每一个play包含了一个task列表(任务列表)
+       2. 一个task在其所对应的所有主机上(通过 host pattern匹配的所有主机)执行完毕之后,下一个task才会执行
+       3. 在一个play之中,所有hosts会获取相同的任务指令,这是play的一个目的所在,即将一组选出的hosts映射到task,执行相同的操作
+
+   使用命令运行playbook文件：
+       ansible-playbook yaml文件 [-f 并发进程个数上限]
+
+
+示例：
+
+# 测试所有的机器是否健康
+vim ping.yml
+---
+- hosts: all
+  remote_user: root
+  tasks:
+   - ping:
+
+
+# 给web组的服务器安装配置httpd服务器，并修改其监听端口，开启服务器和设置开机自启动
+vim ping.yml
+---
+- hosts: web
+  remote_user: root
+  tasks:
+    - name: install the latest version of Apache
+      yum:
+        name: httpd
+        state: present
+    - lineinfile:
+        path: /etc/httpd/conf/httpd.conf
+        regexp: '^Listen'
+        line: 'Listen 8080'
+    - replace:
+        path: /etc/httpd/conf/httpd.conf
+        regexp: '#(ServerName).*'
+        replace: '\1 www.lyu.com'
+    - name: write http host file
+      shell: echo 'hello world' >  /var/www/html/index.html
+    - service:
+        name: httpd
+        state: started
+    - service:
+        name: httpd
+        enabled: yes
+
+
+
+
+语法进阶
+
+   1. 使用变量参数
+     1.1 用法格式： 用vars代表变量定义，用{{变量名}}调用
+         例如：
+---
+- hosts: all
+  remote_user: root
+  vars:
+     service: maraidb
+  tasks:
+     - name: install "{{service}}"
+       yum: 
+        name: {{service}}
+        state: present
+    - service:
+        name: {{service}}
+        state: started
+
+     1.2 给简单变量通过命令参数进行赋值，例如上面这个yaml文件，为执行的时候想service变量变成httpd
+ansible-playbook install.yml -e service="httpd"
+
+
+     1.3 定义复杂变量，格式如下
+  vars:
+     service: 
+        name: "maraidb"
+        free: "免费开源"
+
+   使用的时候调用：
+      {{service.name}} 代表 maraidb
+      {{service.free}} 代表 免费开源
+
+     1.4 给复杂变量进行传参
+
+     1.5 用于解决密码明文的问题：
+         问题源： user模块的password常常设置密码失败，其原因是因为password是把字符串直接写入shadow,并没有改变,而Linux的shadow密码是经过加密的,所以不能使用。
+         解决反感：通过管道进行过滤，这样下面的变量值就可以和user模块的password结合实现设置密码
+{{ '密码明文' | password_hash('sha512')}}
+
+例如：创建一个testuser用户，密码为123456，并要求其第一次登陆时修改密码
+---
+- hosts: all
+  remote_user: root
+  vars:
+    username: testuser
+  tasks:
+    - name: create user "{{username}}"
+      user: password={{'123456' |password_hash('sha512')}} name={{username}}
+    - shell: chage -d 0 {{username}}
+
+
+   2. 错误处理error
+      默认当ansible程序运行中，当某个命令执行后，$?返回值不是0，那么ansible会停止命令并返回error
+      可是有的时候，我们需要忽略错误继续运行，忽略错误有两个操作
+         一个方法是让命令后无论对错 $?都为0
+  shell: 执行的命令命令 || /bin/true
+        另一个方法是通过参数设置，让ansible忽略error
+  shell: 执行的命令命令
+  ignore_errors: True
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+文件描述符
+
+定义
+   exec 55>f1
+使用
+   echo asd >&55
+删除文件描述符
+   exec 55>&-
+
+
+
+
+
+
+#!/bin/bash
+URL=${1:-"www.baidu.com"}
+exec 9<>/dev/tcp/$URL/80
+echo -ne "GET / HTTP/1.1\r\n" >&9
+echo -ne "Host: $URL\r\n" >&9
+echo -ne "User-Agent:curl" >&9
+echo -e "\r\n" >&9
+
+cat <&9
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ELK
+
+    定义： ELK是一整套解决方案,是三个软件产品的首字母缩写,很多公司都在使用,如:Sina、携程、华为、美团等
+
+ELK分别代表			对比LAMP中的组键
+E	Elasticsearch(ES)	负责日志检索和储存	M mysql数据库
+L	Logstash	负责日志的收集和分析、处理	P php解释器
+K	Kibana	负责日志的可视化	A apache网页
+
+    总的数据流程是： Logstash收集日志把数据处理完插入到Elasticsearch数据库中，然后Kibana读取Elasticsearch做成页面反馈给用户
+
+
+    解决问题：分布式日志数据集中式查询和管理、系统监控,包含系统硬件和应用各个组件的监控、故障排查、安全信息和事件管理、报表功能
+
+
+10：30--10：50
+
+
+
+！！！！
+集群组建的原理流程
+    首先，单台服务器会根据配置启动基本基本配置，然后根据配置中的集群机器的域名去网络中寻找，当寻找到其中一个，
+
+
+安装ES集群
+
+    0. 配置DNS服务，如果没有，下面的域名可以直接用IP代替，不过还是要设置主机名
+
+    1. 安装JDK
+yum install -y java-1.8.0-openjdk
+
+    2. 安装软件包，资源包中分享了这个包
+rpm -ivh elasticsearch-2.3.4.rpm
+
+    3. 修改配置文件/etc/elasticsearch/elasticsearch.yml
+sed -i '/cluster.name:/ccluster.name: 集群名称' /etc/elasticsearch/elasticsearch.yml
+sed -i "/node.name:/cnode.name: ${HOSTNAME}(这只是一个节点名，可以自定义，只要不重复即可)" /etc/elasticsearch/elasticsearch.yml
+sed -i '/network.host:/cnetwork.host: 0.0.0.0' /etc/elasticsearch/elasticsearch.yml
+sed -i '/discovery.zen.ping.unicast.hosts:/cdiscovery.zen.ping.unicast.hosts: ["集群中的域名1","集群中的域名2","集群中的域名n"]' /etc/elasticsearch/elasticsearch.yml
+
+    4. 启动服务
+systemctl restart elasticsearch
+systemctl enabled elasticsearch
+
+    5. 检查服务
+curl http://集群中任意一个域名:9200/_cluster/health?pretty
+
+# 查看里面的 cluster_name 看是否和自己设定的集群名称相同
+# 查看里面的 "status" 的值是不是 "green"，这表示集群正常
+# 查看里面的 number_of_nodes 看个数是否等同于集群中的机器数，如果不是排查每个机器，哪个机器是1，那么它就是自主独立出来的，让这机器重启elasticsearch服务即可
+
+
+   *. 使用ansible批量对多台机器进行部署
+
+# 下面是用与ansible-playbook批量管理集群的yaml文件
+---
+- hosts: es
+  remote_user: root
+  tasks:
+    - name: install JDK
+      yum:
+        name: java-1.8.0-openjdk
+        state: present
+    - copy:
+        src: /root/elasticsearch-2.3.4.rpm
+        dest: /mnt/elas.rpm
+        owner: root
+        group: root
+        mode: 0644
+    - shell: rpm -ivh /mnt/elas.rpm
+    - lineinfile:
+        path: /etc/elasticsearch/elasticsearch.yml
+        regexp: 'cluster.name:'
+        line: "cluster.name: 集群名称"
+    - lineinfile:
+        path: /etc/elasticsearch/elasticsearch.yml
+        regexp: 'node.name:'
+        line: "node.name: ${HOSTNAME}"
+    - lineinfile:
+        path: /etc/elasticsearch/elasticsearch.yml
+        regexp: 'network.host:'
+        line: "network.host: 0.0.0.0"
+    - lineinfile:
+        path: /etc/elasticsearch/elasticsearch.yml
+        regexp: 'discovery.zen.ping.unicast.hosts:'
+        line: 'discovery.zen.ping.unicast.hosts: ["集群中的域名1","集群中的域名2","集群中的域名n"]'
+    - service:
+        name: elasticsearch
+        state: started
+    - service:
+        name: elasticsearch
+        enabled: yes
+
+
+
+
+注意点：
+    1. 在配置文件中discovery.zen.ping.unicast.hosts的值后面不需要写全所有机器的域名，只需要写2到3个。
+       不过，如果没写全，就有一个风险，拿就是，如果写在配置中的机器没有启动服务，这时候想加入集群的机器启动服务，那么它将会自己组成一个独立的集群。
+   - -  所以，如果测试发现number_of_nodes个数不对，那就是这个问题所致的。
+
+    2. 在配置文件中cluster.name，所有机器的集群名称要相同，查找集群用的域名组也要是一样的。也就是说，除了node.name每个机器不同，其他的配置必须一模一样，不然容易出一些莫名其妙的问题
+
+
+
+安装插件
+
+    使用命令： 
+# 网络源安装，用ftp协议就写ftp，用http协议就写http
+/usr/share/elasticsearch/bin/plugin install ftp://网络IP地址/head.zip
+# 使用本地的zip包进行安装
+/usr/share/elasticsearch/bin/plugin install file:///本地目录/kopf.zip
+
+   查看已经安装的插件信息
+/usr/share/elasticsearch/bin/plugin list
+
+    前往浏览器使用查看信息
+http://安装插件的主机域名:9200/_plugin/插件名/
+
+
+   运维常用的是head插件
+
+
+20-30
+
+
+调用 RESTful API
+
+
+   Elasticsearch提供了一系列RESTful的API用于
+       1. 检查集群、节点、索引的健康度、状态和统计
+       2. 管理集群、节点、索引的数据及元数据
+       3. 对索引进行CRUD操作及查询操作
+       4. 执行其他高级操作如分页、排序、过滤等
+
+    其中POST或PUT数据使用json的数据格式
+
+RESTful API 实例： 
+   1. 可以使用_cat查询集群状态
+# 查看cat中有哪些模块可以使用，可以复制到URL后面进行查看
+curl http://安装插件的主机域名:9200/_cat/
+
+# 如果进入一个模块后，想查看详细信息
+curl http://安装插件的主机域名:9200/_cat/模块名?v
+# 查看检索的详细信息
+curl http://192.168.1.18:9200/_cat/shards?v
+
+# 如果进入一个模块后想查看帮助信息
+curl http://安装插件的主机域名:9200/_cat/模块名?help
+# 查看所有节点模块的帮助信息
+http://192.168.1.18:9200/_cat/nodes/?help
+
+
+
+   2. 创建一个索引,并设置分片数量与副本数量(可以使用PUT请求也可以是POST请求)
+# 使用curl软件进行下列操作
+curl -XPUT 'http://安装插件的主机域名:9200/索引名/' -d '{
+  "settings":{
+     "index":{
+     "number_of_shards": 分片个数,
+     "number_of_replicas": 副本个数(备份几个)
+    }
+  }
+}'
+
+
+   3. 增
+
+curl -XPUT 'http://安装插件的主机域名:9200/索引名/类型(自定义一个名字)/ID号(第几个数据)' -d '{
+   JSON文件
+    "列名1" : "值1",
+    "列名2" : "值2",
+    "列名n" : "值n"
+}'
+
+
+curl -XPUT 'http://192.168.1.18:9200/t5/sg/1' -d '{
+   "name" : "ccc"
+   "love" : "drink tea"
+   "other name" : ""
+}'
+
+
+   4. 改
+curl -XPUT 'http://安装插件的主机域名:9200/索引名/类型(自定义一个名字)/ID号(第几个数据)/_update' -d '{
+   "doc":{
+      "要修改列名" : "改后值"
+   }
+}'
+
+
+   5. 查
+curl -XGET 'http://安装插件的主机域名:9200/索引名/类型/ID号'
+
+   6. 删
+# 删除某列
+curl -XDELETE 'http://安装插件的主机域名:9200/索引名/类型/ID号'
+
+# 删除某个索引
+curl -XDELETE 'http://安装插件的主机域名:9200/索引名'
+
+
+
+
+
+
+HTTP协议简介
+
+   http请求由三部分组成，分别是:请求行、消息报头、请求正文。
+
+    请求行以一个方法符号开头，以空格分开，后面跟着请求的URI和协议版本，格式：Method Request-URI HTTP-Version CRLF
+
+   http请求方法：
+      常用方法 GET，POST，HEAD
+      其他方法 OPTIONS，PUT，DELETE，TRACE，CONNECT
+      其中 ES 常用的是： PUT--- 增       DELETE --- 删    POST --- 改     GET --- 查
+
+curl命令
+
+     在linux中curl是一个利用URL规则在命令行下工作的文件传输工具，可以说是一款很强大的http命令行工具。
+     它支持多种请求模式，自定义请求头等强大功能，是一款综合工具
+
+    curl 常用参数
+      -A   修改请求 agent
+      -X   设置请求方法
+      -i   显示返回头信息
 
 
 
