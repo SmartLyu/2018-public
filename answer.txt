@@ -262,27 +262,49 @@ vim ping.yml
   tasks:
      - name: install "{{service}}"
        yum: 
-        name: {{service}}
-        state: present
+         name: {{service}}
+         state: present
     - service:
-        name: {{service}}
-        state: started
+         name: {{service}}
+         state: started
 
      1.2 给简单变量通过命令参数进行赋值，例如上面这个yaml文件，为执行的时候想service变量变成httpd
 ansible-playbook install.yml -e service="httpd"
-
+ansible-playbook yml文件名 -e 参数名="设置的参数值"
 
      1.3 定义复杂变量，格式如下
+---
+- hosts: all
+  remote_user: root
   vars:
      service: 
         name: "maraidb"
         free: "免费开源"
+  tasks:
+     - name: install "{{service.name}}" "{{service.free}}"
+       yum: 
+         name: {{service.name}}
+         state: present
+    - service:
+         name: {{service.name}}
+         state: started
+
 
    使用的时候调用：
       {{service.name}} 代表 maraidb
       {{service.free}} 代表 免费开源
 
-     1.4 给复杂变量进行传参
+     1.4 给复杂变量进行传参 (有两个方案)
+        1.4.1 使用JSON格式上传参数数据
+ansible-playbook install.yml -e "{"service":{"name":"oracle","free":"收费闭源"}}"
+ansible-playbook yml文件名 -e "{"参数":{"参数字段1":"值","参数字段2":"值"}}"
+        1.4.2 使用一个yml格式的文件进行传参
+
+# 写一个yml文件(vars.yml)，然后以这个文件为参数传递到playbook中
+service: 
+  name: "oracle"
+  free: "收费闭源"
+ansible-playbook install.yml -e "@vars.yml(@刚刚取的文件名)"
 
      1.5 用于解决密码明文的问题：
          问题源： user模块的password常常设置密码失败，其原因是因为password是把字符串直接写入shadow,并没有改变,而Linux的shadow密码是经过加密的,所以不能使用。
@@ -301,319 +323,187 @@ ansible-playbook install.yml -e service="httpd"
     - shell: chage -d 0 {{username}}
 
 
-   2. 错误处理error
+   2. 错误处理 error
       默认当ansible程序运行中，当某个命令执行后，$?返回值不是0，那么ansible会停止命令并返回error
       可是有的时候，我们需要忽略错误继续运行，忽略错误有两个操作
-         一个方法是让命令后无论对错 $?都为0
+         一个方法是让命令后无论对错 $?都为0；这样ansible执行中不管是否有问题都不会报错
   shell: 执行的命令命令 || /bin/true
-        另一个方法是通过参数设置，让ansible忽略error
+        另一个方法是通过参数设置，让ansible忽略error；会显示报错，而且只对所跟的这个shell生效 (推荐使用)
   shell: 执行的命令命令
   ignore_errors: True
 
+   3. 逻辑处理 handlers(和task平级)
+      避免有多次改变发生时每次都执行指定的操作,取而代之仅在所有的变化发生完成后一次性地执行指定操作
+      可以理解为C、Java的函数，数据库中的存储对象，它是简化逻辑思路，只要要调用的时候写就好，不管写了多少个，再最后都将执行一次。
+      但是它不是当读取的时候立刻执行，他是读取后，记录这个命令要执行，当tasks完整执行后再执行handlers的命令。
+      注意：
+         1. 使用notify调用的是handler段的name定义的串,必须一致,否则达不到触发的效果
+         2. 多个task触发同一个notify的时候,同一个服务只会触发一次
+         3. 而且notify可以触发多个条件,在生产环境中往往涉及到某一个配置文件的改变要重启若干服务的场景,handler用到这里非常适合
+         4. 结合vars可以写出非常普适的服务管理脚本。
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-文件描述符
-
-定义
-   exec 55>f1
-使用
-   echo asd >&55
-删除文件描述符
-   exec 55>&-
-
-
-
-
-
-
-#!/bin/bash
-URL=${1:-"www.baidu.com"}
-exec 9<>/dev/tcp/$URL/80
-echo -ne "GET / HTTP/1.1\r\n" >&9
-echo -ne "Host: $URL\r\n" >&9
-echo -ne "User-Agent:curl" >&9
-echo -e "\r\n" >&9
-
-cat <&9
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-ELK
-
-    定义： ELK是一整套解决方案,是三个软件产品的首字母缩写,很多公司都在使用,如:Sina、携程、华为、美团等
-
-ELK分别代表			对比LAMP中的组键
-E	Elasticsearch(ES)	负责日志检索和储存	M mysql数据库
-L	Logstash	负责日志的收集和分析、处理	P php解释器
-K	Kibana	负责日志的可视化	A apache网页
-
-    总的数据流程是： Logstash收集日志把数据处理完插入到Elasticsearch数据库中，然后Kibana读取Elasticsearch做成页面反馈给用户
-
-
-    解决问题：分布式日志数据集中式查询和管理、系统监控,包含系统硬件和应用各个组件的监控、故障排查、安全信息和事件管理、报表功能
-
-
-10：30--10：50
-
-
-
-！！！！
-集群组建的原理流程
-    首先，单台服务器会根据配置启动基本基本配置，然后根据配置中的集群机器的域名去网络中寻找，当寻找到其中一个，
-
-
-安装ES集群
-
-    0. 配置DNS服务，如果没有，下面的域名可以直接用IP代替，不过还是要设置主机名
-
-    1. 安装JDK
-yum install -y java-1.8.0-openjdk
-
-    2. 安装软件包，资源包中分享了这个包
-rpm -ivh elasticsearch-2.3.4.rpm
-
-    3. 修改配置文件/etc/elasticsearch/elasticsearch.yml
-sed -i '/cluster.name:/ccluster.name: 集群名称' /etc/elasticsearch/elasticsearch.yml
-sed -i "/node.name:/cnode.name: ${HOSTNAME}(这只是一个节点名，可以自定义，只要不重复即可)" /etc/elasticsearch/elasticsearch.yml
-sed -i '/network.host:/cnetwork.host: 0.0.0.0' /etc/elasticsearch/elasticsearch.yml
-sed -i '/discovery.zen.ping.unicast.hosts:/cdiscovery.zen.ping.unicast.hosts: ["集群中的域名1","集群中的域名2","集群中的域名n"]' /etc/elasticsearch/elasticsearch.yml
-
-    4. 启动服务
-systemctl restart elasticsearch
-systemctl enabled elasticsearch
-
-    5. 检查服务
-curl http://集群中任意一个域名:9200/_cluster/health?pretty
-
-# 查看里面的 cluster_name 看是否和自己设定的集群名称相同
-# 查看里面的 "status" 的值是不是 "green"，这表示集群正常
-# 查看里面的 number_of_nodes 看个数是否等同于集群中的机器数，如果不是排查每个机器，哪个机器是1，那么它就是自主独立出来的，让这机器重启elasticsearch服务即可
-
-
-   *. 使用ansible批量对多台机器进行部署
-
-# 下面是用与ansible-playbook批量管理集群的yaml文件
 ---
-- hosts: es
+- hosts: all
   remote_user: root
   tasks:
-    - name: install JDK
-      yum:
-        name: java-1.8.0-openjdk
-        state: present
-    - copy:
-        src: /root/elasticsearch-2.3.4.rpm
-        dest: /mnt/elas.rpm
-        owner: root
-        group: root
-        mode: 0644
-    - shell: rpm -ivh /mnt/elas.rpm
-    - lineinfile:
-        path: /etc/elasticsearch/elasticsearch.yml
-        regexp: 'cluster.name:'
-        line: "cluster.name: 集群名称"
-    - lineinfile:
-        path: /etc/elasticsearch/elasticsearch.yml
-        regexp: 'node.name:'
-        line: "node.name: ${HOSTNAME}"
-    - lineinfile:
-        path: /etc/elasticsearch/elasticsearch.yml
-        regexp: 'network.host:'
-        line: "network.host: 0.0.0.0"
-    - lineinfile:
-        path: /etc/elasticsearch/elasticsearch.yml
-        regexp: 'discovery.zen.ping.unicast.hosts:'
-        line: 'discovery.zen.ping.unicast.hosts: ["集群中的域名1","集群中的域名2","集群中的域名n"]'
-    - service:
-        name: elasticsearch
-        state: started
-    - service:
-        name: elasticsearch
-        enabled: yes
+    - name: config httpd.conf
+      copy: 
+        src=/root/playbook/httpd.conf
+        dest=/etc/httpd/conf/httpd.conf
+      notify:
+        - restart httpd
+    - name: write http host file
+      shell: echo 'hello world' >  /var/www/html/index.html
+  handlers:
+    - name: restart httpd
+      service: 
+        name=httpd
+        state=restarted
+
+   4. 判断处理 when
+      而when判断只对当前的所在的块有效
+
+---
+- name: Install httpd
+  hosts: all
+  tasks:
+  - name: Install httpd via yum
+    yum: name=httpd state=installed
+    when: ansible_os_family == "RedHat"
+  - name: Install VIM via apt
+    apt: name=httpd state=installed
+    when: ansible_os_family == "Debian"
 
 
+   5. 获取保存值 register
+      有时候我们还需要更复杂的例子,如判断前一个命令的执行结果去处理后面的操作,这时候就需要register模块来保存前一个命令的返回状态,在后面进行调用。
+      可以和判断结合起来，把上一个命令的结果存在一个值中，然后进行when判断。
+
+# 举例：对系统负载进行监测以及特殊处理，出现问题的话就报错
+---
+- hosts: all
+  remote_user: root
+  tasks:
+    - shell: uptime |awk '{printf("%f\n",$(NF-2))}'
+      register: result
+    - shell: echo 'error, free is not enough' | mail -s 'Error' -u xxx@yy.com
+      when: result.stdout|float > 0.5
+    - service: 
+        name=httpd
+        state=stopped
+      when: result.stdout|float > 0.8
+# 其中 result.stdout|float 代表把数据改成数字
 
 
-注意点：
-    1. 在配置文件中discovery.zen.ping.unicast.hosts的值后面不需要写全所有机器的域名，只需要写2到3个。
-       不过，如果没写全，就有一个风险，拿就是，如果写在配置中的机器没有启动服务，这时候想加入集群的机器启动服务，那么它将会自己组成一个独立的集群。
-   - -  所以，如果测试发现number_of_nodes个数不对，那就是这个问题所致的。
+   6. 循环语句with_items
+      可以理解为Linux的for循环，只不过是写在后面，而循环中的值由变量item代替。
 
-    2. 在配置文件中cluster.name，所有机器的集群名称要相同，查找集群用的域名组也要是一样的。也就是说，除了node.name每个机器不同，其他的配置必须一模一样，不然容易出一些莫名其妙的问题
-
-
-
-安装插件
-
-    使用命令： 
-# 网络源安装，用ftp协议就写ftp，用http协议就写http
-/usr/share/elasticsearch/bin/plugin install ftp://网络IP地址/head.zip
-# 使用本地的zip包进行安装
-/usr/share/elasticsearch/bin/plugin install file:///本地目录/kopf.zip
-
-   查看已经安装的插件信息
-/usr/share/elasticsearch/bin/plugin list
-
-    前往浏览器使用查看信息
-http://安装插件的主机域名:9200/_plugin/插件名/
-
-
-   运维常用的是head插件
-
-
-20-30
-
-
-调用 RESTful API
-
-
-   Elasticsearch提供了一系列RESTful的API用于
-       1. 检查集群、节点、索引的健康度、状态和统计
-       2. 管理集群、节点、索引的数据及元数据
-       3. 对索引进行CRUD操作及查询操作
-       4. 执行其他高级操作如分页、排序、过滤等
-
-    其中POST或PUT数据使用json的数据格式
-
-RESTful API 实例： 
-   1. 可以使用_cat查询集群状态
-# 查看cat中有哪些模块可以使用，可以复制到URL后面进行查看
-curl http://安装插件的主机域名:9200/_cat/
-
-# 如果进入一个模块后，想查看详细信息
-curl http://安装插件的主机域名:9200/_cat/模块名?v
-# 查看检索的详细信息
-curl http://192.168.1.18:9200/_cat/shards?v
-
-# 如果进入一个模块后想查看帮助信息
-curl http://安装插件的主机域名:9200/_cat/模块名?help
-# 查看所有节点模块的帮助信息
-http://192.168.1.18:9200/_cat/nodes/?help
-
-
-
-   2. 创建一个索引,并设置分片数量与副本数量(可以使用PUT请求也可以是POST请求)
-# 使用curl软件进行下列操作
-curl -XPUT 'http://安装插件的主机域名:9200/索引名/' -d '{
-  "settings":{
-     "index":{
-     "number_of_shards": 分片个数,
-     "number_of_replicas": 副本个数(备份几个)
-    }
-  }
-}'
-
-
-   3. 增
-
-curl -XPUT 'http://安装插件的主机域名:9200/索引名/类型(自定义一个名字)/ID号(第几个数据)' -d '{
-   JSON文件
-    "列名1" : "值1",
-    "列名2" : "值2",
-    "列名n" : "值n"
-}'
-
-
-curl -XPUT 'http://192.168.1.18:9200/t5/sg/1' -d '{
-   "name" : "ccc"
-   "love" : "drink tea"
-   "other name" : ""
-}'
-
-
-   4. 改
-curl -XPUT 'http://安装插件的主机域名:9200/索引名/类型(自定义一个名字)/ID号(第几个数据)/_update' -d '{
-   "doc":{
-      "要修改列名" : "改后值"
-   }
-}'
-
-
-   5. 查
-curl -XGET 'http://安装插件的主机域名:9200/索引名/类型/ID号'
-
-   6. 删
-# 删除某列
-curl -XDELETE 'http://安装插件的主机域名:9200/索引名/类型/ID号'
-
-# 删除某个索引
-curl -XDELETE 'http://安装插件的主机域名:9200/索引名'
+---
+- hosts: all
+  remote_user: root
+  tasks:
+    - name: add users
+      user: 
+        name={{item.name}}
+        group={{item.group}} 
+        password={{'123456' |password_hash('sha512')}} 
+      with_items:
+        - {name: "test1", group: "root"}
+        - {name: "test2", group: "root"}
+        - {name: "test3", group: "bash"}
+        - {name: "test4", group: "bash"}
 
 
 
 
 
 
-HTTP协议简介
+   6. 嵌套循环 with_nested
 
-   http请求由三部分组成，分别是:请求行、消息报头、请求正文。
+---
+- hosts: all
+  remote_user: root
+  vars:
+    un: [a, b, c]
+    id: [1, 2, 3]
+  tasks:
+    - name: add users
+      shell: echo {{item}}
+      with_nested:
+        - "{{un}}"
+        - "{{id}}"
 
-    请求行以一个方法符号开头，以空格分开，后面跟着请求的URI和协议版本，格式：Method Request-URI HTTP-Version CRLF
 
-   http请求方法：
-      常用方法 GET，POST，HEAD
-      其他方法 OPTIONS，PUT，DELETE，TRACE，CONNECT
-      其中 ES 常用的是： PUT--- 增       DELETE --- 删    POST --- 改     GET --- 查
+组合与标记
 
-curl命令
+   1. 标记 tags
+      给指定的任务定义一个调用标识，而客户可以在操作端直接调用，使用 ansible-playbook yml文件内容 --tags=标记名
 
-     在linux中curl是一个利用URL规则在命令行下工作的文件传输工具，可以说是一款很强大的http命令行工具。
-     它支持多种请求模式，自定义请求头等强大功能，是一款综合工具
+---
+- hosts: all
+  remote_user: root
+  vars:
+    soft: httpd
+  tasks:
+    - name: install {{soft}}
+      yum: name={{soft}}
+    - name: config httpd.conf
+      copy: 
+        src=/root/playbook/httpd.conf
+        dest=/etc/httpd/conf/httpd.conf
+    - name: config services
+        copy: 
+          src=/root/playbook/httpd.conf
+          dest=/etc/httpd/conf/httpd.conf
+    - name: restart services
+          service: 
+            name={{soft}}
+            enabled=yes 
+            state=restarted 
+          tags: restartweb
 
-    curl 常用参数
-      -A   修改请求 agent
-      -X   设置请求方法
-      -i   显示返回头信息
+# 执行的时候，只执行标记的那个块的内容
+ansible-playbook yml文件内容 --tags=restartweb
+
+
+   2. 获取其他yml文件中的内容 include and roles
+      在编写 playbook 的时候随着项目越来越大，playbook越来越复杂，修改也很麻烦。
+      这时可以把一些play、task 或handler放到其他文件中，通过include指令包含进来是一个不错的选择
+
+      执行roles像是加强版的include，它可以引入一个项目的文件和目录
+
+一般所需的目录层级有
+vars	变量层
+tasks	任务层
+handlers	触发条件
+files	文件
+template	模板
+default	默认,优先级最低
+
+
+
+调试
+
+   只是测试运行，不真实运行：  ansible-playbook -C --list-tasks --list-hosts
+     显示受到影响的主机host     --list-hosts
+     显示工作的task            --list-tasks
+     显示将要运行的tag          --list-tags
+
+---
+- hosts: all
+  remote_user: root
+  tasks:
+    - shell: uptime |awk '{printf("%f\n",$(NF-2))}'
+      register: result
+    - shell: touch /tmp/isreboot
+      when: result.stdout|float > 0.5
+    - name: Show debug info
+      debug: var=result
+
+
+
+
+
 
 
 
